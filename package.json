@@ -1,0 +1,32 @@
+{
+  "name": "mg_web_router",
+  "version": "0.0.1",
+  "config": {
+    "date": "13 October 2023"
+  },
+  "description": "Express-like Router for mg_web",
+  "main": "./src/mg_web_router.mjs",
+  "type": "module",
+  "exports": {
+    ".": "./src/mg_web_router.mjs",
+  },
+  "engines" : {
+    "node" : ">=18.0.0"
+  },
+  "scripts": {
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robtweed/mg_web_router.git"
+  },
+  "author": "Rob Tweed, MGateway Ltd",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/robtweed/mg_web_router/issues"
+  },
+  "homepage": "https://github.com/robtweed/mg_web_router#readme",
+  "dependencies": {
+    "find-my-way": "latest",
+    "mg-dbx-napi": "latest"
+  }
+}

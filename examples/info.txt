@@ -1,0 +1,5 @@
+The example assumes that mg_web_node.mjs is being run with port 7777:
+
+
+        node /opt/qoper8/mg_web/experimental/mg_web_node.mjs 7777
+
