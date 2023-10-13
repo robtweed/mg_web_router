@@ -1,4 +1,4 @@
-import {Router} from './mg_web_router.mjs';
+import {Router} from 'mg_web_router';
 
 const router = new Router({logging: true});
 

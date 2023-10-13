@@ -32,6 +32,15 @@ Framework are significantly reduced.
 *mg_web*, together with *mg_web_router*, therefore makes a JavaScript Web Framework redundant, and creates a very
 high-performance API server platform without any unnecessary duplication of the HTTP service.
 
+## Installing *mg_web_router*
+
+        npm install mg_web_router
+
+## Using *mg_web_router*
+
+See the Example files in the [/examples](./examples) folder.
+
+
 
 ## License
 
