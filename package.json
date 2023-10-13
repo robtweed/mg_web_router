@@ -8,7 +8,7 @@
   "main": "./src/mg_web_router.mjs",
   "type": "module",
   "exports": {
-    ".": "./src/mg_web_router.mjs",
+    ".": "./src/mg_web_router.mjs"
   },
   "engines" : {
     "node" : ">=18.0.0"
