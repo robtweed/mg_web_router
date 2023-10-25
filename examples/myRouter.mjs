@@ -1,4 +1,4 @@
-import {Router} from 'mg-web-router';
+import {Router} from 'mgw-router';
 import { randomUUID } from 'crypto';
 
 import { createClient } from 'redis';

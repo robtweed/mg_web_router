@@ -1,6 +1,6 @@
 {
-  "name": "mg-web-router",
-  "version": "0.1.0",
+  "name": "mgw-router",
+  "version": "0.1.1",
   "config": {
     "date": "25 October 2023"
   },

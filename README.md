@@ -34,7 +34,7 @@ high-performance API server platform without any unnecessary duplication of the 
 
 ## Installing *mg_web_router*
 
-        npm install mg-web-router
+        npm install mgw-router
 
 ## Using *mg_web_router*
 
