@@ -23,11 +23,12 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
-13 October 2023
+22 October 2023
 
 */
 
 import {server, mglobal, mclass} from 'mg-dbx-napi';
+import {glsDB} from 'glsdb';
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const router = require('find-my-way')();
@@ -126,6 +127,8 @@ let r_logging;
 let r_context;
 let socket;
 let timer;
+let evTarget;
+let noOfRequests = 0;
 
 class Router {
   constructor(options) {
@@ -138,7 +141,7 @@ class Router {
     this.context = {};
     r_context = this.context;
     let R = this;
-    let delay = 5 * 60 * 1000;
+    let delay = 1 * 60 * 1000;
     let cacheExpiryTime = 10 * 60 * 1000;
     r_log = this.log;
     r_logging = this.logging;
@@ -158,7 +161,7 @@ class Router {
     this.emit = function(type, data) {
       if (listeners.has(type)) {
         let handler =  listeners.get(type);
-        handler.call(q, data);
+        handler.call(R, data);
       }
     }
 
@@ -166,7 +169,8 @@ class Router {
 
     let startTimer = function() {
       timer = setInterval(function() {
-        console.log('checking mglobal cache');
+        console.log('Requests for ' + process.pid + ': ' + noOfRequests);
+        //console.log('checking mglobal cache in ' + process.pid);
         let now = Date.now();
 
         // delete cached containers that have been around too long
@@ -285,10 +289,12 @@ class Router {
   mgdbx(args) {
     if (!args) return;
     if (this.context.mgdbx) return;
-    //console.log('connecting to database');
+    console.log('connecting to database');
     let db = new server();
     db.open(args);
+    let R = this;
     this.context.mgdbx = {
+      type: args.type,
       db: db,
       mglobal: mglobal,
       mclass: mclass,
@@ -296,7 +302,7 @@ class Router {
         let args = [...arguments];
         let key = args.toString();
         if (!cached_mglobal.has(key)) {
-          console.log('** mgdbx use: new key so create container');
+          //console.log('** mgdbx use in ' + process.pid + ': new key so create container: ' + key);
           cached_mglobal.set(key, {
             container: new mglobal(db, ...args),
             at: Date.now()
@@ -305,9 +311,16 @@ class Router {
         return cached_mglobal.get(key).container;
       }
     };
+
+    const glsdb = new glsDB(this.context.mgdbx);
+    this.context.glsdb = glsdb;
+
     this.on('stop', function() {
       console.log('Worker is about to be shut down');
-      if (this.context.mgdbx) db.close();
+      if (R.context.mgdbx) {
+        db.close();
+        console.log('database connection closed');
+      }
     });
   }
 
@@ -317,7 +330,7 @@ class Router {
     if (!handlerFn || typeof handlerFn !== 'function') return;
     let R = this;
     router.on(method, url, async function(Request, params) {
-      console.log('*** handling ' + url + ' in process ' + process.pid);
+      //console.log('*** handling ' + url + ' in process ' + process.pid);
       Request.params = params;
       Request.routerPath = url;
 
@@ -361,20 +374,37 @@ class Router {
   }
 
   async handler(cgi, content, sys) {
+    //let R = this;
+    //console.log('*** handled by ' + process.pid);
+
+    noOfRequests++;
+
     if (!socket) {
       socket = sys.get('socket');
-      socket.on('close', () => {
-        console.log('Connection closed - closing down process ' + process.pid);
+      evTarget = sys.get('evTarget');
+
+      evTarget.addEventListener('stop', function() {
+        console.log('*** stop event triggered');
+        console.log('*** Shut down worker ' + process.pid + ' cleanly...');
         clearInterval(timer);
-        if (r_context.mgdbx) {
-          r_context.mgdbx.db.close();
-          console.log('mgdbx-napi connection to database closed');
-        }
+        r_emit('stop');
+      });
+
+
+      process.on('uncaughtException', (err, origin) => {
+        console.log('*** Worker ' + process.pid + ' detected uncaught exception: shutting down gracefully...');
+        console.log(err);
+        clearInterval(timer);
+        r_emit('stop');
         process.exit();
       });
+
     }
     let protocol = cgi.get('SERVER_PROTOCOL').split('/')[0].toLowerCase();
     let contentType = cgi.get('CONTENT_TYPE');
+    let queryStr = cgi.get('QUERY_STRING') || '';
+    let query = new URLSearchParams(queryStr);
+    query = Object.fromEntries(query);
     let body = content.toString();
     if (contentType === 'application/json') {
       try {
@@ -385,7 +415,7 @@ class Router {
     }
     let Request = {
       method: cgi.get('REQUEST_METHOD'),
-      query: cgi.get('QUERY_STRING'),
+      query: query,
       body: body,
       headers: {
         'Content-Type': contentType,

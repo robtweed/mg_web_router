@@ -1,8 +1,8 @@
 {
-  "name": "mg_web_router",
-  "version": "0.0.2",
+  "name": "mg-web-router",
+  "version": "0.1.0",
   "config": {
-    "date": "13 October 2023"
+    "date": "25 October 2023"
   },
   "description": "Express-like Router for mg_web",
   "main": "./src/mg_web_router.mjs",
@@ -27,6 +27,7 @@
   "homepage": "https://github.com/robtweed/mg_web_router#readme",
   "dependencies": {
     "find-my-way": "latest",
-    "mg-dbx-napi": "latest"
+    "mg-dbx-napi": "latest",
+    "glsdb": "latest"
   }
 }

@@ -1,6 +1,16 @@
-import {Router} from 'mg_web_router';
+import {Router} from 'mg-web-router';
+import { randomUUID } from 'crypto';
+
+import { createClient } from 'redis';
+
+const client = await createClient()
+  .on('error', err => console.log('Redis Client Error', err))
+  .connect();
 
 const router = new Router({logging: true});
+
+
+
 
 router.mgdbx({
   type: "YottaDB",
@@ -14,12 +24,12 @@ router.mgdbx({
 });
 
 router.get('/mgweb/helloworld', (Request, ctx) => {
-  ctx.time = Date.now();
+  //ctx.time = Date.now();
 
   return {
     payload: {
       hello: 'world 123',
-      Request: Request
+      //Request: Request
     }
   };
 
@@ -49,26 +59,134 @@ router.get('/mgweb/user/:userId', (Request, ctx) => {
 
 });
 
-// post route
-// if applcation.json content-type, body is parsed automatically as jSON
 
-// curl -v -X POST -H "Content-Type: application/json" -d "{\"name\": \"Chris Munt\"}" http://localhost:8080/mgweb/save
-
-router.post('/mgweb/save', (Request, ctx) => {
-  ctx.time = Date.now();
-
-  let person = ctx.mgdbx.use('Person');
-  let key = person.increment('nextId', 1);
-  person.set('data', key, Request.body.name);
+router.get('/mgweb/uuid', (Request, ctx) => {
 
   return {
     payload: {
-      saved: true,
-      Request: Request
+      uuid: randomUUID()
     }
   };
 
 });
+
+router.get('/mgweb/uuidRedis', async (Request, ctx) => {
+
+  let uuid = randomUUID();
+
+  await client.HSET('redistest', uuid, 'hello world');
+
+  return {
+    payload: {
+      uuid: uuid
+    }
+  };
+
+});
+
+router.get('/mgweb/uuidYdb', (Request, ctx) => {
+
+  let uuid = randomUUID();
+
+  ctx.mgdbx.use('ydbtest').set(uuid, 'hello world');
+
+  return {
+    payload: {
+      uuid: uuid
+    }
+  };
+
+});
+
+
+// post route
+// if applcation.json content-type, body is parsed automatically as jSON
+
+//  3 versions using various levels of mg-dbx-napi abstraction
+
+// curl -v -X POST -H "Content-Type: application/json" -d "{\"name\": \"Chris Munt\"}" 
+
+// direct mg-dbx-napi APIs
+
+http://localhost:8080/mgweb/save1
+
+
+router.post('/mgweb/save1', (Request, ctx) => {
+
+  let person = ctx.mgdbx.use('Person');
+  let key = person.increment('nextId', 1);
+  person.set('data', key, 'name', Request.body.name);
+
+  return {
+    payload: {
+      saved: true
+    }
+  };
+
+});
+
+// 1st-level glsdb abstraction APIs
+
+router.post('/mgweb/save2', (Request, ctx) => {
+
+  let personId = new ctx.glsdb.node('Person.nextId');
+  let person = new ctx.glsdb.node('Person.data');
+
+  let id = personId.increment();
+  person.$(id).document = {
+    name: Request.body.name,
+  };
+
+  return {
+    payload: {
+      saved: true
+    }
+  };
+
+});
+
+// proxied glsdb abstraction using _increment
+
+router.post('/mgweb/save3', (Request, ctx) => {
+
+  let person = new ctx.glsdb.node('Person').proxy;
+  let id = person.nextId._increment();
+
+  person.data[id] = {
+    name: Request.body.name
+  }
+
+  return {
+    payload: {
+      saved: true
+    }
+  };
+
+});
+
+// proxied glsdb abstraction using ++ and lock/unlock
+
+router.post('/mgweb/save4', (Request, ctx) => {
+
+  let person = new ctx.glsdb.node('Person').proxy;
+  person.nextId._lock();
+  person.nextId++;
+  person.nextId._unlock();
+  let id = person.nextId.valueOf();
+
+  person.data[id] = {
+    name: Request.body.name
+  }
+
+  return {
+    payload: {
+      saved: true
+    }
+  };
+
+});
+
+
 
 let handler = router.handler;
 
