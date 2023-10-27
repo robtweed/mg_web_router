@@ -23,12 +23,10 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
-22 October 2023
+26 October 2023
 
 */
 
-import {server, mglobal, mclass} from 'mg-dbx-napi';
-import {glsDB} from 'glsdb';
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const router = require('find-my-way')();
@@ -120,13 +118,11 @@ const statusText = new Map([
 ]);
 
 let handlers = new Map();
-let cached_mglobal = new Map();
 let r_log;
 let r_emit;
 let r_logging;
 let r_context;
 let socket;
-let timer;
 let evTarget;
 let noOfRequests = 0;
 
@@ -141,8 +137,6 @@ class Router {
     this.context = {};
     r_context = this.context;
     let R = this;
-    let delay = 1 * 60 * 1000;
-    let cacheExpiryTime = 10 * 60 * 1000;
     r_log = this.log;
     r_logging = this.logging;
 
@@ -166,162 +160,10 @@ class Router {
     }
 
     r_emit = this.emit;
+  };
 
-    let startTimer = function() {
-      timer = setInterval(function() {
-        console.log('Requests for ' + process.pid + ': ' + noOfRequests);
-        //console.log('checking mglobal cache in ' + process.pid);
-        let now = Date.now();
-
-        // delete cached containers that have been around too long
-
-        cached_mglobal.forEach((value, key, map) => {
-          let time = now - value.at;
-          if (time > cacheExpiryTime) {
-            map.delete(key);
-            console.log('cached container for ' + key + ' deleted');
-          }
-        });
-
-      }, delay);
-    }
-
-    startTimer();
-
-    if (options.mgdbx) {
-      options.onStartup = {
-        module: './mgdbx-worker-startup.mjs',
-        arguments: options.mgdbx
-      }
-    }
-
-    if (options.routes) {
-      for (let route of options.routes) {
-        router.on(route.method, route.url, async (Request, params) => {
-          //console.log('handling ' + route.url + ' in process ' + process.pid);
-          Request.params = params;
-          Request.routerPath = route.url;
-          if (!handlers.has(route.handler)) {
-            //console.log('*** handler ' + route.handler + ' not found, so loading it ***');
-            let {handler} = await import(route.handler);
-            handlers.set(route.handler, handler);
-          }
-          else {
-            //console.log('*** handler ' + route.handler + ' found in cache ***');
-          }
-          let fn = handlers.get(route.handler);
-          let Response;
-          if (fn.constructor.name === 'AsyncFunction') {
-            Response = await fn.call(this, Request, this.context);
-          }
-          else {
-            Response = fn.call(this, Request, this.context);
-          }
-          return Response;
-        });
-      }
-    }
-
-    this.start = async () => {
-      if (options.onStartup) {
-        try {
-          const {onStartup} = await import(options.onStartup.module);
-          startupFn = onStartup;
-        }
-        catch(err) {
-          let error = 'Unable to load onStartup customisation module ' + options.onStartup.module;
-          R.log(error);
-          R.log(JSON.stringify(err, Object.getOwnPropertyNames(err)));
-          R.emit('error', {
-            error: error,
-            caughtError: JSON.stringify(err, Object.getOwnPropertyNames(err))
-          });
-          return false;
-        }
-
-        let args = options.onStartup.arguments || false;
-        try {
-          if (fn.constructor.name === 'AsyncFunction') {
-            await fn.call(this, args, this.context);
-          }
-          else {
-            fn.call(this, args, this.context);
-          }
-        }
-        catch(err) {
-          let error = 'Error running onStartup customisation module ' + options.onStartup.module;
-          R.log(error);
-          R.log(JSON.stringify(err, Object.getOwnPropertyNames(err)));
-          R.emit('error', {
-            error: error,
-            caughtError: JSON.stringify(err, Object.getOwnPropertyNames(err))
-          });
-          return false;
-        }
-      }
-      return true;
-    }
-  }
-
-  async onStartup(startupFn) {
-    if (!startupFn) return;
-    try {
-      if (startupFn.constructor.name === 'AsyncFunction') {
-        await startupFn.call(this, this.context);
-      }
-      else {
-        startupFn.call(this, this.context);
-      }
-    }
-    catch(err) {
-      let error = 'Error running onStartup customisation function';
-      this.log(error);
-      this.log(JSON.stringify(err, Object.getOwnPropertyNames(err)));
-      this.emit('error', {
-        error: error,
-        caughtError: JSON.stringify(err, Object.getOwnPropertyNames(err))
-      });
-      return false;
-    }
-    return true;
-  }
-
-  mgdbx(args) {
-    if (!args) return;
-    if (this.context.mgdbx) return;
-    console.log('connecting to database');
-    let db = new server();
-    db.open(args);
-    let R = this;
-    this.context.mgdbx = {
-      type: args.type,
-      db: db,
-      mglobal: mglobal,
-      mclass: mclass,
-      use: function() {
-        let args = [...arguments];
-        let key = args.toString();
-        if (!cached_mglobal.has(key)) {
-          //console.log('** mgdbx use in ' + process.pid + ': new key so create container: ' + key);
-          cached_mglobal.set(key, {
-            container: new mglobal(db, ...args),
-            at: Date.now()
-          });
-        }
-        return cached_mglobal.get(key).container;
-      }
-    };
-
-    const glsdb = new glsDB(this.context.mgdbx);
-    this.context.glsdb = glsdb;
-
-    this.on('stop', function() {
-      console.log('Worker is about to be shut down');
-      if (R.context.mgdbx) {
-        db.close();
-        console.log('database connection closed');
-      }
-    });
+  register(pluginFn, options) {
+    pluginFn.call(this, options);
   }
 
   route(method, url, handlerFn) {
@@ -386,7 +228,6 @@ class Router {
       evTarget.addEventListener('stop', function() {
         console.log('*** stop event triggered');
         console.log('*** Shut down worker ' + process.pid + ' cleanly...');
-        clearInterval(timer);
         r_emit('stop');
       });
 

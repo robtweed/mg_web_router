@@ -1,14 +1,16 @@
 {
   "name": "mgw-router",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "config": {
-    "date": "25 October 2023"
+    "date": "26 October 2023"
   },
   "description": "Express-like Router for mg_web",
   "main": "./src/mg_web_router.mjs",
   "type": "module",
   "exports": {
-    ".": "./src/mg_web_router.mjs"
+    ".": "./src/mg_web_router.mjs",
+    "./mgdbx": "./src/mgdbx-plugin.mjs",
+    "./glsdb": "./src/glsdb-plugin.mjs"
   },
   "engines" : {
     "node" : ">=18.0.0"
