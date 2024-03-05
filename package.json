@@ -1,8 +1,8 @@
 {
   "name": "mgw-router",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "config": {
-    "date": "26 October 2023"
+    "date": "5 March 2024"
   },
   "description": "Express-like Router for mg_web",
   "main": "./src/mg_web_router.mjs",

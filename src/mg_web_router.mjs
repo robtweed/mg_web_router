@@ -2,7 +2,7 @@
  ----------------------------------------------------------------------------
  | mg_web_router: Express-like Router Interface for mg_web_node              |
  |                                                                           |
- | Copyright (c) 2023 MGateway Ltd,                                          |
+ | Copyright (c) 2023-24 MGateway Ltd,                                       |
  | Redhill, Surrey UK.                                                       |
  | All rights reserved.                                                      |
  |                                                                           |
@@ -23,7 +23,7 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
-26 October 2023
+5 March 2024
 
 */
 
@@ -131,8 +131,8 @@ class Router {
     options = options || {};
     let listeners = new Map();
     this.name = 'mg_web_router';
-    this.build = '0.1';
-    this.buildDate = '13 October 2023';
+    this.build = '0.2';
+    this.buildDate = '5 March 2024';
     this.logging = options.logging || false;
     this.context = {};
     r_context = this.context;

@@ -44,7 +44,7 @@ See the Example files in the [/examples](./examples) folder.
 
 ## License
 
- Copyright (c) 2023 MGateway Ltd,                           
+ Copyright (c) 2023-24 MGateway Ltd,                           
  Redhill, Surrey UK.                                                      
  All rights reserved.                                                     
                                                                            
