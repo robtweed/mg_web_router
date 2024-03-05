@@ -215,7 +215,7 @@ class Router {
     this.route('PATCH', url, handlerFn);
   }
 
-  async handler(cgi, content, sys) {
+  async handler(ws, cgi, content, sys) {
     //let R = this;
     //console.log('*** handled by ' + process.pid);
 
