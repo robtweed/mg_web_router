@@ -2,7 +2,7 @@
  ----------------------------------------------------------------------------
  | mg_web_router: Express-like Router Interface for mg_web_node              |
  |                                                                           |
- | Copyright (c) 2023-24 MGateway Ltd,                                       |
+ | Copyright (c) 2023-25 MGateway Ltd,                                       |
  | Redhill, Surrey UK.                                                       |
  | All rights reserved.                                                      |
  |                                                                           |
@@ -23,13 +23,13 @@
  |  limitations under the License.                                           |
  ----------------------------------------------------------------------------
 
-5 March 2024
+9 January 2025
 
 */
 
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
-const router = require('find-my-way')();
+let router = require('find-my-way')();
 
 const CRLF = '\r\n';
 const statusText = new Map([
@@ -121,7 +121,7 @@ let handlers = new Map();
 let r_log;
 let r_emit;
 let r_logging;
-let r_context;
+var r_context;
 let socket;
 let evTarget;
 let noOfRequests = 0;
@@ -173,18 +173,26 @@ class Router {
     let R = this;
     router.on(method, url, async function(Request, params) {
       //console.log('*** handling ' + url + ' in process ' + process.pid);
+      //console.log('params:');
+      //console.log(params);
       Request.params = params;
       Request.routerPath = url;
 
       let Response;
       if (handlerFn.constructor.name === 'AsyncFunction') {
+        //console.log('async handler function');
         Response = await handlerFn.call(R, Request, R.context);
       }
       else {
+        //console.log('normal handler function');
         Response = handlerFn.call(R, Request, R.context);
       }
       return Response;
     });
+  }
+
+  sse(url, handlerFn) {
+    this.route('PATCH', url, handlerFn);
   }
 
   get(url, handlerFn) {
@@ -215,125 +223,144 @@ class Router {
     this.route('PATCH', url, handlerFn);
   }
 
-  async handler(ws, cgi, content, sys) {
-    //let R = this;
-    //console.log('*** handled by ' + process.pid);
+  handler() {
+    let R = this;
+    return async function(ws, cgi, content, sys) {
 
-    noOfRequests++;
+      //console.log('*** handled by ' + process.pid);
+      //console.log('handler called by mg-web');
+      //console.log('R');
+      //console.log(R);
 
-    if (!socket) {
-      socket = sys.get('socket');
-      evTarget = sys.get('evTarget');
+      noOfRequests++;
 
-      evTarget.addEventListener('stop', function() {
-        console.log('*** stop event triggered');
-        console.log('*** Shut down worker ' + process.pid + ' cleanly...');
-        r_emit('stop');
-      });
+      if (!socket) {
+        socket = sys.get('socket');
+        evTarget = sys.get('evTarget');
 
-
-      process.on('uncaughtException', (err, origin) => {
-        console.log('*** Worker ' + process.pid + ' detected uncaught exception: shutting down gracefully...');
-        console.log(err);
-        clearInterval(timer);
-        r_emit('stop');
-        process.exit();
-      });
-
-    }
-    let protocol = cgi.get('SERVER_PROTOCOL').split('/')[0].toLowerCase();
-    let contentType = cgi.get('CONTENT_TYPE');
-    let queryStr = cgi.get('QUERY_STRING') || '';
-    let query = new URLSearchParams(queryStr);
-    query = Object.fromEntries(query);
-    let body = content.toString();
-    if (contentType === 'application/json') {
-      try {
-        body = JSON.parse(body);
-      }
-      catch(err) {
-      }
-    }
-    let Request = {
-      method: cgi.get('REQUEST_METHOD'),
-      query: query,
-      body: body,
-      headers: {
-        'Content-Type': contentType,
-        'Content-Length': cgi.get('CONTENT_LENGTH'),
-        Host: cgi.get('HTTP_HOST'),
-        'User-Agent': cgi.get('HTTP_USER_AGENT'),
-        Accept: cgi.get('HTTP_ACCEPT')
-      },
-      ip: cgi.get('REMOTE_ADDR'),
-      hostname: cgi.get('HTTP_HOST'),
-      protocol: protocol,
-      url: cgi.get('SCRIPT_NAME')
-    };
-
-    let Response;
-    let route = router.find(Request.method, Request.url);
-    if (route) {
-      try {
-        Response = await route.handler(Request, route.params);
-      }
-      catch(err) {
-        let error = 'Error running handler for ' + Request.method + ' ' + Request.url;
-        r_log(error);
-        r_log(JSON.stringify(err, Object.getOwnPropertyNames(err)));
-        r_emit('error', {
-          error: error,
-          caughtError: JSON.stringify(err, Object.getOwnPropertyNames(err))
+        evTarget.addEventListener('stop', function() {
+          console.log('*** stop event triggered');
+          console.log('*** Shut down worker ' + process.pid + ' cleanly...');
+          r_emit('stop');
         });
-        Response = {
-          payload: {
-            error: 'Error Running Handler',
-            caughtError: JSON.stringify(err, Object.getOwnPropertyNames(err))
-          },
-          status: 500
-        };
-      }
-    }
-    else {
-      Response = {
-        payload: {error: 'Invalid Request'},
-        status: 400
-      };
-    }
 
-    let status = Response.status || 200;
-    let text = statusText.get(status) || 'OK';
-  
-    let res = cgi.get('SERVER_PROTOCOL') + ' ' + status + ' ' + text + CRLF;
-    contentType = 'application/json';
-    if (Response.headers && Response.headers['Content-Type']) {
-      contentType = Response.headers['Content-Type']
-    }
-    res = res + 'Content-Type: ' + contentType + CRLF;
-    let connection = 'close';
-    if (Response.headers && Response.headers.Connection) {
-      connection = Response.headers.Connection
-    }
-    res = res + 'Connection: ' + connection + CRLF;
-    if (Response.headers) {
-      for (let name in Response.headers) {
-        if (name !== 'Content-Type' && name !== 'Connection') {
-          res = res + name + ': ' + Response.headers[name] + CRLF
+        process.on('uncaughtException', (err, origin) => {
+          console.log('*** Worker ' + process.pid + ' detected uncaught exception: shutting down gracefully...');
+          console.log(err);
+          //clearInterval(timer);
+          r_emit('stop');
+          process.exit();
+        });
+      }
+
+      if (ws.sse === true) {
+        //
+        // Initialise SSE server
+
+        let result = ws.initsse(sys, "");
+        let url = cgi.get('SCRIPT_NAME');
+        let route = router.find('PATCH', url);
+        //console.log('route found:');
+        //console.log(route);
+        let resp = route.handler(ws, R.context);
+        return result;
+      }
+
+      let protocol = cgi.get('SERVER_PROTOCOL').split('/')[0].toLowerCase();
+      let contentType = cgi.get('CONTENT_TYPE');
+      let queryStr = cgi.get('QUERY_STRING') || '';
+      let query = new URLSearchParams(queryStr);
+      query = Object.fromEntries(query);
+      let body = content.toString();
+      if (contentType === 'application/json') {
+        try {
+          body = JSON.parse(body);
+        }
+        catch(err) {
         }
       }
-    }
-    res = res + CRLF;
+      let Request = {
+        method: cgi.get('REQUEST_METHOD'),
+        query: query,
+        body: body,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': cgi.get('CONTENT_LENGTH'),
+          Host: cgi.get('HTTP_HOST'),
+          'User-Agent': cgi.get('HTTP_USER_AGENT'),
+          Accept: cgi.get('HTTP_ACCEPT')
+        },
+        ip: cgi.get('REMOTE_ADDR'),
+        hostname: cgi.get('HTTP_HOST'),
+        protocol: protocol,
+        url: cgi.get('SCRIPT_NAME')
+      };
 
-    if (Response.payload) {
-      let payload = Response.payload;
-      if (contentType === 'application/json') {
-        payload = JSON.stringify(payload);
+      let Response;
+      let route = router.find(Request.method, Request.url);
+      if (route) {
+        try {
+          //console.log('route params:');
+          //console.log(route.params);
+          Response = await route.handler(Request, route.params);
+        }
+        catch(err) {
+          let error = 'Error running handler for ' + Request.method + ' ' + Request.url;
+          r_log(error);
+          r_log(JSON.stringify(err, Object.getOwnPropertyNames(err)));
+          r_emit('error', {
+            error: error,
+            caughtError: JSON.stringify(err, Object.getOwnPropertyNames(err))
+          });
+          Response = {
+            payload: {
+              error: 'Error Running Handler',
+              caughtError: JSON.stringify(err, Object.getOwnPropertyNames(err))
+            },
+            status: 500
+          };
+        }
       }
-      res = res + payload;
-    }
-    return res;
-  }
+      else {
+        Response = {
+          payload: {error: 'Invalid Request'},
+          status: 400
+        };
+      }
 
+      let status = Response.status || 200;
+      let text = statusText.get(status) || 'OK';
+  
+      let res = cgi.get('SERVER_PROTOCOL') + ' ' + status + ' ' + text + CRLF;
+      contentType = 'application/json';
+      if (Response.headers && Response.headers['Content-Type']) {
+        contentType = Response.headers['Content-Type']
+      }
+      res = res + 'Content-Type: ' + contentType + CRLF;
+      let connection = 'close';
+      if (Response.headers && Response.headers.Connection) {
+        connection = Response.headers.Connection
+      }
+      res = res + 'Connection: ' + connection + CRLF;
+      if (Response.headers) {
+        for (let name in Response.headers) {
+          if (name !== 'Content-Type' && name !== 'Connection') {
+            res = res + name + ': ' + Response.headers[name] + CRLF
+          }
+        }
+      }
+      res = res + CRLF;
+
+      if (Response.payload) {
+        let payload = Response.payload;
+        if (contentType === 'application/json') {
+          payload = JSON.stringify(payload);
+        }
+        res = res + payload;
+      }
+      return res;
+    };
+  }
 
   log(message) {
     if (r_logging) {

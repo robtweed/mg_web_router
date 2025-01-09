@@ -144,6 +144,6 @@ router.post('/mgweb/savep2', (Request, ctx) => {
 
 
 
-let handler = router.handler;
+let handler = router.handler();
 
 export {handler};
